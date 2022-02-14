@@ -8,3 +8,4 @@ edition = "2021"
 [dependencies]
 tokio = { version = "1", features = ["full"] }
 tokio-tungstenite = "0.16"
+notify = "4.0.17"
