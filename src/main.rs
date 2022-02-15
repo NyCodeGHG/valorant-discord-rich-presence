@@ -1,6 +1,6 @@
 use std::{path::Path, sync::mpsc::channel};
 
-use game::GameWatcher;
+use game::watch;
 
 pub mod game;
 pub mod lockfile;
@@ -8,7 +8,7 @@ pub mod lockfile;
 #[tokio::main]
 async fn main() {
     let (tx, rx) = channel();
-    let _ = GameWatcher::new(
+    watch(
         tx,
         Path::new("C:/Users/chloe/AppData/Local/Riot Games/Riot Client/Config/"),
     );
