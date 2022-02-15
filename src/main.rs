@@ -1,6 +1,6 @@
 use std::{path::Path, sync::mpsc::channel};
 
-use game::watch;
+use game::{watch, GameMessage};
 
 pub mod game;
 pub mod lockfile;
@@ -14,7 +14,10 @@ async fn main() {
     );
     loop {
         match rx.recv() {
-            Ok(event) => println!("{:?}", event),
+            Ok(message) => match message {
+                GameMessage::GameStarted => println!("Game Started!"),
+                GameMessage::GameStopped => println!("Game Stopped!"),
+            },
             Err(e) => println!("watch error: {:?}", e),
         }
     }

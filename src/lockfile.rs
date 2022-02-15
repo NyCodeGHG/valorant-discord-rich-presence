@@ -7,11 +7,11 @@ use tokio::fs;
 
 #[derive(Debug)]
 pub struct RiotCredentials {
-    name: String,
-    pid: u32,
-    port: u32,
-    password: String,
-    protocol: String,
+    pub name: String,
+    pub pid: u32,
+    pub port: u32,
+    pub password: String,
+    pub protocol: String,
 }
 
 pub async fn get_lockfile_credentials() -> Result<RiotCredentials, LockfileError> {
