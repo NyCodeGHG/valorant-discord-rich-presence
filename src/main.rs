@@ -1,10 +1,13 @@
 use std::{
     env::{self, VarError},
-    path::{Path, PathBuf}, sync::mpsc::channel,
+    path::{Path, PathBuf},
+    sync::mpsc::channel,
 };
 
 use anyhow::Result;
-use game::{GameMessage, watch};
+use game::{watch, GameMessage};
+
+use crate::{lockfile::get_lockfile_credentials, websocket::run_websocket};
 
 pub mod game;
 pub mod lockfile;
@@ -18,7 +21,13 @@ async fn main() -> Result<()> {
     loop {
         match rx.recv() {
             Ok(message) => match message {
-                GameMessage::GameStarted => println!("Game Started!"),
+                GameMessage::GameStarted => {
+                    println!("Game Started!");
+                    let creds = get_lockfile_credentials().await?;
+                    run_websocket(creds).await;
+                    println!("Websocket stopped!");
+                    break;
+                }
                 GameMessage::GameStopped => {
                     println!("Game Stopped!");
                     break;
