@@ -1,11 +1,16 @@
 use std::{
     env::{self, VarError},
+    num::NonZeroU32,
     path::{Path, PathBuf},
     sync::mpsc::channel,
+    time::{SystemTime, Duration}, thread,
 };
 
 use anyhow::Result;
+use discord::DiscordPresence;
+use discord_sdk::activity::{Activity, ActivityBuilder, Assets, PartyPrivacy};
 use game::{watch, GameMessage};
+use nonzero_ext::nonzero;
 
 use crate::{lockfile::get_lockfile_credentials, websocket::run_websocket};
 
