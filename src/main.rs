@@ -3,22 +3,19 @@ use std::{
     num::NonZeroU32,
     path::{Path, PathBuf},
     sync::mpsc::channel,
-    time::{SystemTime, Duration}, thread,
+    thread,
+    time::{Duration, SystemTime},
 };
 
 use anyhow::Result;
-use discord::DiscordPresence;
-use discord_sdk::activity::{Activity, ActivityBuilder, Assets, PartyPrivacy};
 use game::{watch, GameMessage};
-use nonzero_ext::nonzero;
 
-use crate::{lockfile::get_lockfile_credentials, websocket::run_websocket};
+use crate::{lockfile::get_lockfile_credentials, valorant::websocket::receive_websocket_events};
 
 pub mod discord;
 pub mod game;
 pub mod lockfile;
 pub mod valorant;
-pub mod websocket;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -29,8 +26,7 @@ async fn main() -> Result<()> {
             GameMessage::GameStarted => {
                 println!("Game Started!");
                 let creds = get_lockfile_credentials().await?;
-                run_websocket(creds).await.unwrap();
-                println!("Websocket stopped!");
+                receive_websocket_events(creds).await.unwrap();
             }
             GameMessage::GameStopped => {
                 println!("Game Stopped!");
