@@ -2,10 +2,15 @@ use std::{
     env::{self, VarError},
     path::{Path, PathBuf},
     sync::mpsc::channel,
+    time::Duration,
 };
 
 use anyhow::Result;
+use async_recursion::async_recursion;
 use game::{watch, GameMessage};
+use lazy_static::lazy_static;
+use lockfile::RiotCredentials;
+use reqwest::Client;
 
 use crate::{lockfile::get_lockfile_credentials, valorant::websocket::receive_websocket_events};
 
@@ -18,22 +23,53 @@ pub mod valorant;
 async fn main() -> Result<()> {
     let (tx, rx) = channel();
     watch(tx, get_riot_dir().unwrap().as_path());
-    match rx.recv() {
-        Ok(message) => match message {
-            GameMessage::GameStarted => {
-                println!("Game Started!");
-                let creds = get_lockfile_credentials().await?;
-                receive_websocket_events(creds).await.unwrap();
+    loop {
+        match rx.recv() {
+            Ok(message) => match message {
+                GameMessage::GameStarted => {
+                    println!("Game Started!");
+                    let creds = get_lockfile_credentials().await?;
+                    wait_until_server_ready(&creds, Duration::from_millis(500)).await;
+                    receive_websocket_events(creds).await.unwrap();
+                    println!("Disconnected from websocket.");
+                }
+                GameMessage::GameStopped => {
+                    println!("Game Stopped!");
+                }
+            },
+            Err(e) => {
+                println!("watch error: {:?}", e);
+                break;
             }
-            GameMessage::GameStopped => {
-                println!("Game Stopped!");
-            }
-        },
-        Err(e) => {
-            println!("watch error: {:?}", e);
         }
     }
     Ok(())
+}
+
+#[async_recursion]
+async fn wait_until_server_ready(creds: &RiotCredentials, delay: Duration) {
+    lazy_static! {
+        static ref CLIENT: Client = reqwest::Client::builder()
+            .danger_accept_invalid_certs(true)
+            .build()
+            .unwrap();
+    }
+    let result = CLIENT
+        .get(format!("https://127.0.0.1:{}/help", creds.port))
+        .basic_auth("riot", Some(&creds.password))
+        .send()
+        .await
+        .unwrap()
+        .text()
+        .await;
+    if let Ok(text) = result {
+        if text.contains("OnJsonApiEvent_chat_v4_presences") {
+            return;
+        }
+    }
+    tokio::time::sleep(delay).await;
+    println!("Server is not ready yet. Retrying...");
+    wait_until_server_ready(creds, delay * 2).await;
 }
 
 fn get_riot_dir() -> Result<PathBuf, VarError> {

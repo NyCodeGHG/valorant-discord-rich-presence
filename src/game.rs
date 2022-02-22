@@ -17,7 +17,7 @@ pub fn watch(sender: Sender<GameMessage>, game_dir: &Path) {
 
     thread::spawn(move || {
         let (tx, rx) = channel();
-        let mut watcher = watcher(tx, Duration::from_secs(2)).unwrap();
+        let mut watcher = watcher(tx, Duration::from_millis(300)).unwrap();
         watcher.watch(dir, RecursiveMode::NonRecursive).unwrap();
         loop {
             let event = match rx.recv() {

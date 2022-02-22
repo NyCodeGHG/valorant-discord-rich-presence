@@ -3,14 +3,12 @@ use discord_sdk::{
     wheel::{UserState, Wheel},
     Discord, DiscordApp, Subscriptions,
 };
-use std::fmt::Debug;
 
 pub struct DiscordPresence {
     pub discord: Discord,
     pub user: User,
     pub wheel: Wheel,
 }
-pub trait DiscordAction: Sync + Send + Debug {}
 
 impl DiscordPresence {
     pub async fn new(client_id: i64) -> DiscordPresence {

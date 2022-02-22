@@ -3,8 +3,8 @@ use super::{
     presence::ParsedPresence,
 };
 
-pub fn analyze_presence(presence: ParsedPresence) -> GameState {
-    let game_mode = determine_game_mode(&presence);
+pub fn analyze_presence(presence: &ParsedPresence) -> GameState {
+    let game_mode = determine_game_mode(presence);
 
     let party = Party {
         size: presence.party_size,
@@ -16,7 +16,7 @@ pub fn analyze_presence(presence: ParsedPresence) -> GameState {
         enemy_team: presence.party_owner_match_score_enemy_team,
     };
 
-    let status = determine_status(&presence);
+    let status = determine_status(presence);
 
     GameState {
         game_mode,

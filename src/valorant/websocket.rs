@@ -18,14 +18,18 @@ use crate::{
     valorant::{presence::PresenceResponse, session::SessionResponse},
 };
 
-use super::presence::{ParsedPresence, Presence};
+use super::{
+    presence::{ParsedPresence, Presence},
+    presence_analyzer::analyze_presence,
+};
 
 pub async fn receive_websocket_events(creds: RiotCredentials) -> Result<()> {
     let own_puuid = get_puuid(&creds).await?;
     let (socket, _) = create_websocket_connection(&creds).await;
+    println!("Connected to websocket.");
     let (mut write, read) = futures::StreamExt::split(socket);
     register_ws_event(&mut write, 5, "OnJsonApiEvent_chat_v4_presences").await?;
-
+    println!("Registered for OnJsonApiEvent_chat_v4_presences event.");
     read.filter_map(|result| async { result.ok() })
         .filter_map(|message| async {
             match message {
@@ -50,13 +54,15 @@ fn handle_presences(presences: Vec<Presence>, own_puuid: &str) {
         .filter(|p| p.product == "valorant" && p.puuid == own_puuid)
         .filter_map(|p| decode(&p.private).ok())
         .filter_map(|json| String::from_utf8(json).ok())
-        .inspect(|v| println!("{}", v))
         .filter_map(|json| serde_json::from_str::<ParsedPresence>(&json).ok())
         .collect();
-    let _presence = match presences.first() {
+    let presence = match presences.first() {
         Some(p) => p,
         None => return,
     };
+
+    let presence = analyze_presence(presence);
+    println!("{:#?}", presence);
 }
 
 async fn register_ws_event(
