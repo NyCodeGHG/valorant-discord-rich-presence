@@ -1,10 +1,7 @@
 use std::{
     env::{self, VarError},
-    num::NonZeroU32,
     path::{Path, PathBuf},
     sync::mpsc::channel,
-    thread,
-    time::{Duration, SystemTime},
 };
 
 use anyhow::Result;

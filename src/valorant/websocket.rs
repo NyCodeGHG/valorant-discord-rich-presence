@@ -1,5 +1,5 @@
 use anyhow::{Error, Result};
-use base64::encode;
+use base64::{decode, encode};
 use futures::StreamExt;
 use futures_util::{stream::SplitSink, SinkExt};
 use http::{header::AUTHORIZATION, Request};
@@ -18,7 +18,7 @@ use crate::{
     valorant::{presence::PresenceResponse, session::SessionResponse},
 };
 
-use super::presence::Presence;
+use super::presence::{ParsedPresence, Presence};
 
 pub async fn receive_websocket_events(creds: RiotCredentials) -> Result<()> {
     let own_puuid = get_puuid(&creds).await?;
@@ -38,18 +38,25 @@ pub async fn receive_websocket_events(creds: RiotCredentials) -> Result<()> {
         )
         .map(|response| response.data.data.presences)
         .for_each(|value| async {
-            handle_presences(value, &own_puuid.as_str());
+            handle_presences(value, own_puuid.as_str());
         })
         .await;
     Ok(())
 }
 
 fn handle_presences(presences: Vec<Presence>, own_puuid: &str) {
-    let presences: Vec<&Presence> = presences
+    let presences: Vec<ParsedPresence> = presences
         .iter()
         .filter(|p| p.product == "valorant" && p.puuid == own_puuid)
+        .filter_map(|p| decode(&p.private).ok())
+        .filter_map(|json| String::from_utf8(json).ok())
+        .inspect(|v| println!("{}", v))
+        .filter_map(|json| serde_json::from_str::<ParsedPresence>(&json).ok())
         .collect();
-    println!("{:#?}", presences);
+    let _presence = match presences.first() {
+        Some(p) => p,
+        None => return,
+    };
 }
 
 async fn register_ws_event(
