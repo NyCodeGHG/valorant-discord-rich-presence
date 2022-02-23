@@ -41,7 +41,6 @@ async fn main() -> Result<()> {
                     receive_websocket_events(sender, creds).await.unwrap();
                     let presence = DiscordPresence::new(DISCORD_APP_ID).await;
                     while let Some(state) = receiver.recv().await {
-                        println!("{:#?}", state);
                         let activity = build_activity(&state);
                         presence.discord.update_activity(activity).await.unwrap();
                     }

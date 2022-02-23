@@ -34,7 +34,7 @@ impl DiscordPresence {
             UserState::Disconnected(err) => panic!("failed to connect to Discord: {}", err),
         };
 
-        println!("connected to Discord, local user is {:#?}", user);
+        println!("connected to Discord, local user is {}#{:0>4}", user.username, user.discriminator.unwrap());
 
         DiscordPresence {
             discord,
