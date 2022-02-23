@@ -6,7 +6,7 @@ use http::{header::AUTHORIZATION, Request};
 use lazy_static::lazy_static;
 use native_tls::TlsConnector;
 use reqwest::Client;
-use tokio::net::TcpStream;
+use tokio::{net::TcpStream, sync::mpsc::Sender};
 use tokio_tungstenite::{
     connect_async_tls_with_config,
     tungstenite::{client::IntoClientRequest, handshake::client::Response, Message},
@@ -19,36 +19,42 @@ use crate::{
 };
 
 use super::{
+    game_state::GameState,
     presence::{ParsedPresence, Presence},
     presence_analyzer::analyze_presence,
 };
 
-pub async fn receive_websocket_events(creds: RiotCredentials) -> Result<()> {
+pub async fn receive_websocket_events(
+    sender: Sender<GameState>,
+    creds: RiotCredentials,
+) -> Result<()> {
     let own_puuid = get_puuid(&creds).await?;
     let (socket, _) = create_websocket_connection(&creds).await;
     println!("Connected to websocket.");
     let (mut write, read) = futures::StreamExt::split(socket);
     register_ws_event(&mut write, 5, "OnJsonApiEvent_chat_v4_presences").await?;
     println!("Registered for OnJsonApiEvent_chat_v4_presences event.");
-    read.filter_map(|result| async { result.ok() })
-        .filter_map(|message| async {
-            match message {
-                Message::Text(text) => Some(text),
-                _ => None,
-            }
-        })
-        .filter_map(
-            |message| async move { serde_json::from_str::<PresenceResponse>(&message).ok() },
-        )
-        .map(|response| response.data.data.presences)
-        .for_each(|value| async {
-            handle_presences(value, own_puuid.as_str());
-        })
-        .await;
+    tokio::spawn(async move {
+        read.filter_map(|result| async { result.ok() })
+            .filter_map(|message| async {
+                match message {
+                    Message::Text(text) => Some(text),
+                    _ => None,
+                }
+            })
+            .filter_map(
+                |message| async move { serde_json::from_str::<PresenceResponse>(&message).ok() },
+            )
+            .map(|response| response.data.data.presences)
+            .for_each(|value| async {
+                handle_presences(&sender, value, own_puuid.as_str()).await;
+            })
+            .await;
+    });
     Ok(())
 }
 
-fn handle_presences(presences: Vec<Presence>, own_puuid: &str) {
+async fn handle_presences(sender: &Sender<GameState>, presences: Vec<Presence>, own_puuid: &str) {
     let presences: Vec<ParsedPresence> = presences
         .iter()
         .filter(|p| p.product == "valorant" && p.puuid == own_puuid)
@@ -62,7 +68,7 @@ fn handle_presences(presences: Vec<Presence>, own_puuid: &str) {
     };
 
     let presence = analyze_presence(presence);
-    println!("{:#?}", presence);
+    sender.send(presence).await.unwrap();
 }
 
 async fn register_ws_event(

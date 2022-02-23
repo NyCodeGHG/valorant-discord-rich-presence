@@ -1,7 +1,7 @@
 use std::{
     env::{self, VarError},
     path::{Path, PathBuf},
-    sync::mpsc::channel,
+    sync::mpsc::channel as std_channel,
     time::Duration,
 };
 
@@ -11,8 +11,13 @@ use game::{watch, GameMessage};
 use lazy_static::lazy_static;
 use lockfile::RiotCredentials;
 use reqwest::Client;
+use tokio::sync::mpsc::channel;
 
-use crate::{lockfile::get_lockfile_credentials, valorant::websocket::receive_websocket_events};
+use crate::{
+    discord::{activity::build_activity, DiscordPresence},
+    lockfile::get_lockfile_credentials,
+    valorant::websocket::receive_websocket_events,
+};
 
 pub mod discord;
 pub mod game;
@@ -21,7 +26,7 @@ pub mod valorant;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let (tx, rx) = channel();
+    let (tx, rx) = std_channel();
     watch(tx, get_riot_dir().unwrap().as_path());
     loop {
         match rx.recv() {
@@ -30,7 +35,14 @@ async fn main() -> Result<()> {
                     println!("Game Started!");
                     let creds = get_lockfile_credentials().await?;
                     wait_until_server_ready(&creds, Duration::from_millis(500)).await;
-                    receive_websocket_events(creds).await.unwrap();
+                    let (sender, mut receiver) = channel(128);
+                    receive_websocket_events(sender, creds).await.unwrap();
+                    let presence = DiscordPresence::new(944668216486154291).await;
+                    while let Some(state) = receiver.recv().await {
+                        println!("{:#?}", state);
+                        let activity = build_activity(&state);
+                        presence.discord.update_activity(activity).await.unwrap();
+                    }
                     println!("Disconnected from websocket.");
                 }
                 GameMessage::GameStopped => {

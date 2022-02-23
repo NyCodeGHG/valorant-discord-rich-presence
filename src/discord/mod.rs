@@ -4,10 +4,13 @@ use discord_sdk::{
     Discord, DiscordApp, Subscriptions,
 };
 
+pub mod activity;
+
 pub struct DiscordPresence {
     pub discord: Discord,
     pub user: User,
     pub wheel: Wheel,
+    pub client_id: i64,
 }
 
 impl DiscordPresence {
@@ -37,6 +40,20 @@ impl DiscordPresence {
             discord,
             user,
             wheel,
+            client_id,
         }
+    }
+
+    pub async fn check_connection(&mut self) {
+        let user = self.wheel.user();
+        let state = &*user.0.borrow();
+        if let UserState::Connected(_) = state {
+            return;
+        }
+
+        let client = DiscordPresence::new(self.client_id).await;
+        self.discord = client.discord;
+        self.user = client.user;
+        self.wheel = client.wheel;
     }
 }

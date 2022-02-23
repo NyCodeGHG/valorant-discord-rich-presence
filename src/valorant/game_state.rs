@@ -1,11 +1,14 @@
 use serde::{Deserialize, Serialize};
 
+use super::presence_analyzer::Map;
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct GameState {
     pub game_mode: GameMode,
     pub status: GameStateStatus,
     pub scores: Scores,
     pub party: Party,
+    pub map: Map,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -36,4 +39,18 @@ pub enum GameMode {
     Replication,
     CustomGame,
     Unknown,
+}
+impl GameMode {
+    pub fn get_display_name(&self) -> String {
+        match *self {
+            GameMode::Unrated => "Unrated",
+            GameMode::Competitive => "Competitive",
+            GameMode::SpikeRush => "Spike Rush",
+            GameMode::Deathmatch => "Deathmatch",
+            GameMode::Replication => "Replication",
+            GameMode::CustomGame => "Custom Game",
+            GameMode::Unknown => "Unknown",
+        }
+        .to_owned()
+    }
 }
