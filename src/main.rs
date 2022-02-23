@@ -28,6 +28,7 @@ const DISCORD_APP_ID: i64 = 944668216486154291;
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    print_information();
     let (tx, rx) = std_channel();
     watch(tx, get_riot_dir().unwrap().as_path());
     loop {
@@ -57,6 +58,11 @@ async fn main() -> Result<()> {
         }
     }
     Ok(())
+}
+
+fn print_information() {
+    println!("{} v{}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
+    println!("Git Commit: {}", env!("GIT_VERSION"));
 }
 
 #[async_recursion]
