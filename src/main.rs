@@ -24,6 +24,8 @@ pub mod game;
 pub mod lockfile;
 pub mod valorant;
 
+const DISCORD_APP_ID: i64 = 944668216486154291;
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let (tx, rx) = std_channel();
@@ -37,7 +39,7 @@ async fn main() -> Result<()> {
                     wait_until_server_ready(&creds, Duration::from_millis(500)).await;
                     let (sender, mut receiver) = channel(128);
                     receive_websocket_events(sender, creds).await.unwrap();
-                    let presence = DiscordPresence::new(944668216486154291).await;
+                    let presence = DiscordPresence::new(DISCORD_APP_ID).await;
                     while let Some(state) = receiver.recv().await {
                         println!("{:#?}", state);
                         let activity = build_activity(&state);
