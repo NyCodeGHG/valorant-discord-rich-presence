@@ -1,8 +1,12 @@
 [package]
-name = "valorant-discord-rpc"
+name = "valorant-discord-rich-presence"
 version = "0.1.0"
 edition = "2021"
 publish = false
+authors = [ "NyCode <me@nycode.dev>" ]
+description = "Show what you are doing in valorant in your discord rich presence."
+repository = "https://github.com/NyCodeGHG/valorant-discord-rich-presence"
+license = "GPL-3.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
