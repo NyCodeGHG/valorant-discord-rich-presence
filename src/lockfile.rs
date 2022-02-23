@@ -15,32 +15,26 @@ pub struct RiotCredentials {
     pub protocol: String,
 }
 
+macro_rules! next {
+    ($lockfile_values:expr, $name:expr) => {
+        $lockfile_values
+            .next()
+            .ok_or_else(|| FieldMissingError::new($name))?
+            .parse()?
+    };
+}
+
 pub async fn get_lockfile_credentials() -> Result<RiotCredentials> {
     let local_app_data = env::var("LOCALAPPDATA")?;
     let local_app_data = Path::new(&local_app_data);
     let lockfile = local_app_data.join("Riot Games/Riot Client/Config/lockfile");
     let lockfile_content = fs::read_to_string(&lockfile).await?;
     let mut lockfile_values = lockfile_content.split(':');
-    let name = lockfile_values
-        .next()
-        .ok_or_else(|| FieldMissingError::new("name"))?
-        .to_string();
-    let pid = lockfile_values
-        .next()
-        .ok_or_else(|| FieldMissingError::new("pid"))?
-        .parse::<u32>()?;
-    let port = lockfile_values
-        .next()
-        .ok_or_else(|| FieldMissingError::new("port"))?
-        .parse::<u32>()?;
-    let password = lockfile_values
-        .next()
-        .ok_or_else(|| FieldMissingError::new("password"))?
-        .to_string();
-    let protocol = lockfile_values
-        .next()
-        .ok_or_else(|| FieldMissingError::new("protocol"))?
-        .to_string();
+    let name: String = next!(lockfile_values, "name");
+    let pid: u32 = next!(lockfile_values, "pid");
+    let port: u32 = next!(lockfile_values, "port");
+    let password = next!(lockfile_values, "password");
+    let protocol = next!(lockfile_values, "protocol");
     Ok(RiotCredentials {
         name,
         pid,
