@@ -27,14 +27,18 @@ pub fn build_activity(state: &GameState) -> impl Into<ActivityArgs> {
     let game_mode = &state.game_mode;
     match state.status {
         InGame => {
-            activity = activity
-                .details(format!(
-                    "{} ({} - {})",
-                    game_mode!(game_mode),
-                    state.scores.ally_team,
-                    state.scores.enemy_team
-                ))
-                .state(format!("on {}", state.map.display_name));
+            if state.map.display_name == "The Range" {
+                activity = activity.details("In the Range");
+            } else {
+                activity = activity
+                    .details(format!(
+                        "{} ({} - {})",
+                        game_mode!(game_mode),
+                        state.scores.ally_team,
+                        state.scores.enemy_team
+                    ))
+                    .state(format!("on {}", state.map.display_name));
+            }
         }
         PreGame => {
             activity = activity
