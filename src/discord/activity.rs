@@ -1,4 +1,4 @@
-use std::{num::NonZeroU32};
+use std::num::NonZeroU32;
 
 use discord_sdk::activity::{ActivityArgs, ActivityBuilder, Assets};
 
@@ -28,7 +28,12 @@ pub fn build_activity(state: &GameState) -> impl Into<ActivityArgs> {
     match state.status {
         InGame => {
             activity = activity
-                .details(game_mode!(game_mode))
+                .details(format!(
+                    "{} ({} - {})",
+                    game_mode!(game_mode),
+                    state.scores.ally_team,
+                    state.scores.enemy_team
+                ))
                 .state(format!("on {}", state.map.display_name));
         }
         PreGame => {
