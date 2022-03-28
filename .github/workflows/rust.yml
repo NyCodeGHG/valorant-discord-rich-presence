@@ -11,7 +11,9 @@ jobs:
   build:
     # This program is built for windows, so we use windows here.
     runs-on: windows-latest
-
+    permissions:
+      contents: write
+      pull-requests: write
     steps:
       - name: Checkout Sources
         uses: actions/checkout@v2
