@@ -11,9 +11,6 @@ jobs:
   build:
     # This program is built for windows, so we use windows here.
     runs-on: windows-latest
-    permissions:
-      contents: write
-      pull-requests: write
     steps:
       - name: Checkout Sources
         uses: actions/checkout@v2
@@ -32,11 +29,11 @@ jobs:
             ~/.cargo/git/db/
             target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-      - name: Run clippy
-        uses: actions-rs/clippy-check@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
       - name: Run cargo test
         uses: actions-rs/cargo@v1
         with:
           command: test
+      - name: Run cargo clippy
+        uses: actions-rs/cargo@v1
+        with:
+          command: clippy
