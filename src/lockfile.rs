@@ -1,3 +1,5 @@
+use std::{env, fs, io, path::Path};
+
 use lazy_regex::regex_captures;
 use thiserror::Error;
 
@@ -34,6 +36,22 @@ impl<'a> Lockfile<'a> {
             protocol,
         };
         Ok(lockfile)
+    }
+
+    /// Reads the lockfiles content from the filesystem.
+    ///
+    /// # Panics
+    /// The function panics if the environment variable "LocalAppData" is not set.
+    /// This should never happen, otherwise your machine is really fucked. (Windows only ofc)
+    pub fn read_from_fs() -> Result<String, io::Error> {
+        // construct path to the lockfile
+        let local_app_data =
+            env::var("LocalAppData").expect("environment variable LocalAppData is not set.");
+        let path = Path::new(&local_app_data).join("Riot Games/Riot Client/Config/lockfile");
+
+        // read the lockfile content
+        let content = fs::read_to_string(&path)?;
+        Ok(content)
     }
 }
 
