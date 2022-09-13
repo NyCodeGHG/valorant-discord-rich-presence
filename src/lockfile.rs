@@ -1,66 +1,93 @@
-use std::env;
-use std::error::Error;
-use std::fmt::Display;
-use std::path::Path;
+use lazy_regex::regex_captures;
+use thiserror::Error;
 
-use anyhow::Result;
-use tokio::fs;
-
-#[derive(Debug)]
-pub struct RiotCredentials {
-    pub name: String,
-    pub pid: u32,
-    pub port: u32,
-    pub password: String,
-    pub protocol: String,
+#[derive(Debug, Eq, PartialEq)]
+pub struct Lockfile<'a> {
+    name: &'a str,
+    process_id: u16,
+    port: u16,
+    password: &'a str,
+    protocol: Protocol,
 }
 
-macro_rules! next {
-    ($lockfile_values:expr, $name:expr) => {
-        $lockfile_values
-            .next()
-            .ok_or_else(|| FieldMissingError::new($name))?
-            .parse()?
-    };
-}
+impl<'a> Lockfile<'a> {
+    /// Parses the riot client lockfile in the format `name:pid:port:password:protocol`.
+    pub fn parse(text: &str) -> Result<Lockfile, Error> {
+        let (_, name, process_id, port, password, protocol) =
+            regex_captures!(r#"([^:]+):(\d+):(\d+):([^:]+):(https?)"#, text)
+                .ok_or(Error::InvalidFormat)?;
 
-pub async fn get_lockfile_credentials() -> Result<RiotCredentials> {
-    let local_app_data = env::var("LOCALAPPDATA")?;
-    let local_app_data = Path::new(&local_app_data);
-    let lockfile = local_app_data.join("Riot Games/Riot Client/Config/lockfile");
-    let lockfile_content = fs::read_to_string(&lockfile).await?;
-    let mut lockfile_values = lockfile_content.split(':');
-    let name: String = next!(lockfile_values, "name");
-    let pid: u32 = next!(lockfile_values, "pid");
-    let port: u32 = next!(lockfile_values, "port");
-    let password = next!(lockfile_values, "password");
-    let protocol = next!(lockfile_values, "protocol");
-    Ok(RiotCredentials {
-        name,
-        pid,
-        port,
-        password,
-        protocol,
-    })
-}
+        let process_id: u16 = process_id.parse().map_err(|_| Error::InvalidProcessId)?;
+        let port: u16 = port.parse().map_err(|_| Error::InvalidPort)?;
 
-#[derive(Debug)]
-struct FieldMissingError {
-    field: String,
-}
+        let protocol = match protocol {
+            "https" => Protocol::Secure,
+            "http" => Protocol::Insecure,
+            _ => unreachable!("the regex ensures this can't be a different value"),
+        };
 
-impl FieldMissingError {
-    fn new(field: &str) -> FieldMissingError {
-        FieldMissingError {
-            field: field.to_string(),
-        }
+        let lockfile = Lockfile {
+            name,
+            process_id,
+            port,
+            password,
+            protocol,
+        };
+        Ok(lockfile)
     }
 }
 
-impl Display for FieldMissingError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!("field {} is missing", self.field))
-    }
+#[derive(Debug, Eq, PartialEq)]
+pub enum Protocol {
+    Insecure,
+    Secure,
 }
 
-impl Error for FieldMissingError {}
+#[derive(Debug, Error, Eq, PartialEq)]
+pub enum Error {
+    #[error("The lockfile text has an invalid format.")]
+    InvalidFormat,
+    #[error("The port is an invalid number")]
+    InvalidPort,
+    #[error("The process id is an invalid number")]
+    InvalidProcessId,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_lockfile() {
+        let text = "Riot Client:22568:54846:$@ah7iGKU^9eXkqiVRvZ4:https";
+        let lockfile = Lockfile::parse(text).unwrap();
+        assert_eq!(
+            lockfile,
+            Lockfile {
+                name: "Riot Client",
+                process_id: 22568,
+                port: 54846,
+                password: "$@ah7iGKU^9eXkqiVRvZ4",
+                protocol: Protocol::Secure
+            }
+        );
+    }
+
+    #[test]
+    fn invalid_string() {
+        let text = "hello world";
+        assert_eq!(Lockfile::parse(text).unwrap_err(), Error::InvalidFormat);
+    }
+
+    #[test]
+    fn invalid_process_id() {
+        let text = "Riot Client:22568225688:54846:$@ah7iGKU^9eXkqiVRvZ4:https";
+        assert_eq!(Lockfile::parse(text).unwrap_err(), Error::InvalidProcessId);
+    }
+
+    #[test]
+    fn invalid_port() {
+        let text = "Riot Client:22568:5484654846:$@ah7iGKU^9eXkqiVRvZ4:https";
+        assert_eq!(Lockfile::parse(text).unwrap_err(), Error::InvalidPort);
+    }
+}
