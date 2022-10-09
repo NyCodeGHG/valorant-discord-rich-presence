@@ -3,7 +3,7 @@ name = "valorant-discord-rich-presence"
 version = "0.1.0-beta2"
 edition = "2021"
 publish = false
-authors = [ "NyCode <me@nycode.dev>" ]
+authors = ["NyCode <me@nycode.dev>"]
 description = "Show what you are doing in valorant in your discord rich presence."
 repository = "https://github.com/NyCodeGHG/valorant-discord-rich-presence"
 license = "GPL-3.0"
@@ -14,3 +14,16 @@ license = "GPL-3.0"
 regex = "1.6"
 thiserror = "1.0"
 lazy-regex = "2.3"
+tokio = { version = "1", features = ["full"] }
+tray-item = "0.7.1"
+async-tungstenite = { version = "0.17.2", features = [
+    "tokio-rustls-webpki-roots",
+] }
+base64 = "0.13.0"
+futures = "0.3.24"
+eyre = "0.6.8"
+rustls = { version = "0.20.6", features = ["dangerous_configuration"] }
+tokio-rustls = "0.23.4"
+color-eyre = "0.6.2"
+url = "2.3.1"
+log = "0.4.17"

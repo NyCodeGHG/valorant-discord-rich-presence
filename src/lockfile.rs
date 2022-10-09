@@ -5,11 +5,11 @@ use thiserror::Error;
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct Lockfile<'a> {
-    name: &'a str,
-    process_id: u16,
-    port: u16,
-    password: &'a str,
-    protocol: Protocol,
+    pub name: &'a str,
+    pub process_id: u16,
+    pub port: u16,
+    pub password: &'a str,
+    pub protocol: Protocol,
 }
 
 impl<'a> Lockfile<'a> {
@@ -17,10 +17,10 @@ impl<'a> Lockfile<'a> {
     pub fn parse(text: &str) -> Result<Lockfile, Error> {
         let (_, name, process_id, port, password, protocol) =
             regex_captures!(r#"([^:]+):(\d+):(\d+):([^:]+):(https?)"#, text)
-                .ok_or(Error::InvalidFormat)?;
+                .ok_or(Error::Format)?;
 
-        let process_id: u16 = process_id.parse().map_err(|_| Error::InvalidProcessId)?;
-        let port: u16 = port.parse().map_err(|_| Error::InvalidPort)?;
+        let process_id: u16 = process_id.parse().map_err(|_| Error::ProcessId)?;
+        let port: u16 = port.parse().map_err(|_| Error::Port)?;
 
         let protocol = match protocol {
             "https" => Protocol::Secure,
@@ -64,11 +64,11 @@ pub enum Protocol {
 #[derive(Debug, Error, Eq, PartialEq)]
 pub enum Error {
     #[error("The lockfile text has an invalid format.")]
-    InvalidFormat,
+    Format,
     #[error("The port is an invalid number")]
-    InvalidPort,
+    Port,
     #[error("The process id is an invalid number")]
-    InvalidProcessId,
+    ProcessId,
 }
 
 #[cfg(test)]
@@ -77,6 +77,7 @@ mod tests {
 
     #[test]
     fn parse_lockfile() {
+        // this is not a real password. don't worry :)
         let text = "Riot Client:22568:54846:$@ah7iGKU^9eXkqiVRvZ4:https";
         let lockfile = Lockfile::parse(text).unwrap();
         assert_eq!(
@@ -94,18 +95,18 @@ mod tests {
     #[test]
     fn invalid_string() {
         let text = "hello world";
-        assert_eq!(Lockfile::parse(text).unwrap_err(), Error::InvalidFormat);
+        assert_eq!(Lockfile::parse(text).unwrap_err(), Error::Format);
     }
 
     #[test]
     fn invalid_process_id() {
         let text = "Riot Client:22568225688:54846:$@ah7iGKU^9eXkqiVRvZ4:https";
-        assert_eq!(Lockfile::parse(text).unwrap_err(), Error::InvalidProcessId);
+        assert_eq!(Lockfile::parse(text).unwrap_err(), Error::ProcessId);
     }
 
     #[test]
     fn invalid_port() {
         let text = "Riot Client:22568:5484654846:$@ah7iGKU^9eXkqiVRvZ4:https";
-        assert_eq!(Lockfile::parse(text).unwrap_err(), Error::InvalidPort);
+        assert_eq!(Lockfile::parse(text).unwrap_err(), Error::Port);
     }
 }
