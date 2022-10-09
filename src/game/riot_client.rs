@@ -1,4 +1,4 @@
-use std::collections::VecDeque;
+use std::collections::{HashSet, VecDeque};
 
 use async_tungstenite::{
     tokio::ConnectStream,
@@ -8,7 +8,7 @@ use async_tungstenite::{
     WebSocketStream,
 };
 use base64::encode;
-use futures::{stream::SplitSink, SinkExt, StreamExt};
+use futures::{future::join_all, stream::SplitSink, SinkExt, StreamExt};
 use thiserror::Error;
 use tokio::sync::{
     mpsc::{self, Receiver},
@@ -43,6 +43,8 @@ pub struct RiotSocketClientHandle {
 pub struct RiotSocketClient {
     confirmation_queue: VecDeque<oneshot::Sender<()>>,
     receiver: Receiver<RiotClientMessage>,
+    /// stores the registered events to recover subscriptions on a reconnect.
+    event_subscriptions: HashSet<Event>,
 }
 
 type LockfileSupplier = Box<dyn Fn() -> Option<Lockfile> + Send + Sync>;
@@ -64,6 +66,7 @@ impl RiotSocketClient {
         RiotSocketClient {
             confirmation_queue: VecDeque::new(),
             receiver,
+            event_subscriptions: HashSet::new(),
         }
     }
 
@@ -77,8 +80,22 @@ impl RiotSocketClient {
                 Err(err) => panic!("{}", err),
             };
             tracing::info!("Successfully connected to websocket");
-
             let (mut writer, mut reader) = socket.split();
+
+            if !self.event_subscriptions.is_empty() {
+                tracing::info!("Recovering event subscriptions");
+                let subscriptions = self.event_subscriptions.drain().collect::<Vec<_>>();
+
+                let mut confirmations = Vec::with_capacity(subscriptions.len());
+                for subscription in subscriptions {
+                    let (sender, receiver) = oneshot::channel();
+                    self.subscribe_event(sender, subscription, &mut writer)
+                        .await;
+                    confirmations.push(receiver);
+                }
+                join_all(confirmations).await;
+            }
+
             loop {
                 tokio::select! {
                     message = reader.next() => {
@@ -128,11 +145,7 @@ impl RiotSocketClient {
         event!(Level::DEBUG, "received client message: {:?}", message);
         match message {
             RiotClientMessage::Subscribe(event, sender) => {
-                self.confirmation_queue.push_back(sender);
-                writer
-                    .send(format!(r#"[5, "{event}"]"#).into())
-                    .await
-                    .expect("Failed to send message");
+                self.subscribe_event(sender, event, writer).await;
             }
             RiotClientMessage::Unsubscribe(event, sender) => {
                 self.confirmation_queue.push_back(sender);
@@ -140,8 +153,22 @@ impl RiotSocketClient {
                     .send(format!(r#"[6, "{event}"]"#).into())
                     .await
                     .expect("Failed to send message");
+                self.event_subscriptions.remove(&event);
             }
         }
+    }
+
+    async fn subscribe_event(
+        &mut self,
+        sender: oneshot::Sender<()>,
+        event: Event,
+        writer: &mut SplitSink<WebSocketStream<ConnectStream>, Message>,
+    ) {
+        tracing::info!("Subscribing to {}", event);
+        self.confirmation_queue.push_back(sender);
+        let message = format!(r#"[5, "{event}"]"#).into();
+        self.event_subscriptions.insert(event);
+        writer.send(message).await.expect("Failed to send message");
     }
 }
 

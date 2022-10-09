@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
 /// An event which the client can subscribe to.
-#[derive(Debug)]
+#[derive(Debug, Hash, Clone, PartialEq, Eq)]
 pub enum Event {
     Presences,
 }
