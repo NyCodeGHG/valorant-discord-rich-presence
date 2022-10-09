@@ -14,6 +14,7 @@ use tokio::sync::{
     mpsc::{self, Receiver},
     oneshot,
 };
+use tracing::{event, Level};
 use url::Url;
 
 use crate::{
@@ -22,8 +23,11 @@ use crate::{
 };
 
 mod events;
+mod lockfile_retry;
 
 pub use events::*;
+
+use self::lockfile_retry::read_lockfile_with_retry;
 
 type Result<T> = std::result::Result<T, Error>;
 
@@ -31,7 +35,7 @@ type Result<T> = std::result::Result<T, Error>;
 ///
 /// The underlying client will be dropped
 /// and the running task will exit once every handle has been dropped.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct RiotSocketClientHandle {
     sender: mpsc::Sender<RiotClientMessage>,
 }
@@ -41,14 +45,17 @@ pub struct RiotSocketClient {
     receiver: Receiver<RiotClientMessage>,
 }
 
+type LockfileSupplier = Box<dyn Fn() -> Option<Lockfile> + Send + Sync>;
+
 impl RiotSocketClient {
-    pub async fn from_lockfile(lockfile: Lockfile<'_>) -> Result<RiotSocketClientHandle> {
+    pub async fn from_lockfile(
+        lockfile_supplier: LockfileSupplier,
+    ) -> Result<RiotSocketClientHandle> {
         let (sender, receiver) = mpsc::channel(10);
-        let (socket, _) = connect_async_ignore_certificate(lockfile).await?;
 
         let client = RiotSocketClient::new(receiver);
 
-        tokio::spawn(async move { client.run(socket).await });
+        tokio::spawn(async move { client.run(lockfile_supplier).await });
 
         Ok(RiotSocketClientHandle { sender })
     }
@@ -60,25 +67,39 @@ impl RiotSocketClient {
         }
     }
 
-    async fn run(mut self, socket: WebSocketStream<ConnectStream>) {
-        let (mut writer, mut reader) = socket.split();
+    async fn run(mut self, lockfile_supplier: LockfileSupplier) {
         loop {
-            tokio::select! {
-                message = reader.next() => {
-                    if let Some(message) = message {
-                        match message {
-                            Ok(message) => self.handle_websocket_message(message).await,
-                            Err(error) => eprintln!("{}", error),
+            let lockfile = read_lockfile_with_retry(&lockfile_supplier)
+                .await
+                .expect("Failed to read lockfile");
+            let socket = match connect_async_ignore_certificate(lockfile).await {
+                Ok((socket, _)) => socket,
+                Err(err) => panic!("{}", err),
+            };
+            tracing::info!("Successfully connected to websocket");
+
+            let (mut writer, mut reader) = socket.split();
+            loop {
+                tokio::select! {
+                    message = reader.next() => {
+                        if let Some(message) = message {
+                            match message {
+                                Ok(message) => self.handle_websocket_message(message).await,
+                                Err(_) => {
+                                    tracing::error!("Connection aborted. Trying to reconnect...");
+                                    break;
+                                },
+                            }
+                        } else {
+                            return;
                         }
-                    } else {
-                        break;
-                    }
-                },
-                message = self.receiver.recv() => {
-                    if let Some(message) = message {
-                        self.handle_client_message(message, &mut writer).await;
-                    } else {
-                        break;
+                    },
+                    message = self.receiver.recv() => {
+                        if let Some(message) = message {
+                            self.handle_client_message(message, &mut writer).await;
+                        } else {
+                            return;
+                        }
                     }
                 }
             }
@@ -86,6 +107,7 @@ impl RiotSocketClient {
     }
 
     async fn handle_websocket_message(&mut self, message: Message) {
+        event!(Level::DEBUG, "received websocket message: {}", message);
         match message {
             // confirmation message
             Message::Text(ref value) if value.is_empty() => {
@@ -103,6 +125,7 @@ impl RiotSocketClient {
         message: RiotClientMessage,
         writer: &mut SplitSink<WebSocketStream<ConnectStream>, Message>,
     ) {
+        event!(Level::DEBUG, "received client message: {:?}", message);
         match message {
             RiotClientMessage::Subscribe(event, sender) => {
                 self.confirmation_queue.push_back(sender);
@@ -165,7 +188,7 @@ pub enum Error {
 
 const RIOT_WEBSOCKET_USERNAME: &str = "riot";
 
-impl IntoClientRequest for Lockfile<'_> {
+impl IntoClientRequest for Lockfile {
     fn into_client_request(self) -> tungstenite::Result<Request> {
         let protocol = match self.protocol {
             Protocol::Insecure => "ws",

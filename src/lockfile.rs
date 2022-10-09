@@ -4,19 +4,19 @@ use lazy_regex::regex_captures;
 use thiserror::Error;
 
 #[derive(Debug, Eq, PartialEq)]
-pub struct Lockfile<'a> {
-    pub name: &'a str,
+pub struct Lockfile {
+    pub name: String,
     pub process_id: u16,
     pub port: u16,
-    pub password: &'a str,
+    pub password: String,
     pub protocol: Protocol,
 }
 
-impl<'a> Lockfile<'a> {
+impl Lockfile {
     /// Parses the riot client lockfile in the format `name:pid:port:password:protocol`.
-    pub fn parse(text: &str) -> Result<Lockfile, Error> {
+    pub fn parse(text: String) -> Result<Lockfile, Error> {
         let (_, name, process_id, port, password, protocol) =
-            regex_captures!(r#"([^:]+):(\d+):(\d+):([^:]+):(https?)"#, text)
+            regex_captures!(r#"([^:]+):(\d+):(\d+):([^:]+):(https?)"#, &text)
                 .ok_or(Error::Format)?;
 
         let process_id: u16 = process_id.parse().map_err(|_| Error::ProcessId)?;
@@ -29,10 +29,10 @@ impl<'a> Lockfile<'a> {
         };
 
         let lockfile = Lockfile {
-            name,
+            name: name.to_string(),
             process_id,
             port,
-            password,
+            password: password.to_string(),
             protocol,
         };
         Ok(lockfile)
@@ -78,15 +78,15 @@ mod tests {
     #[test]
     fn parse_lockfile() {
         // this is not a real password. don't worry :)
-        let text = "Riot Client:22568:54846:$@ah7iGKU^9eXkqiVRvZ4:https";
+        let text = "Riot Client:22568:54846:$@ah7iGKU^9eXkqiVRvZ4:https".to_string();
         let lockfile = Lockfile::parse(text).unwrap();
         assert_eq!(
             lockfile,
             Lockfile {
-                name: "Riot Client",
+                name: "Riot Client".to_string(),
                 process_id: 22568,
                 port: 54846,
-                password: "$@ah7iGKU^9eXkqiVRvZ4",
+                password: "$@ah7iGKU^9eXkqiVRvZ4".to_string(),
                 protocol: Protocol::Secure
             }
         );
@@ -94,19 +94,19 @@ mod tests {
 
     #[test]
     fn invalid_string() {
-        let text = "hello world";
+        let text = "hello world".to_string();
         assert_eq!(Lockfile::parse(text).unwrap_err(), Error::Format);
     }
 
     #[test]
     fn invalid_process_id() {
-        let text = "Riot Client:22568225688:54846:$@ah7iGKU^9eXkqiVRvZ4:https";
+        let text = "Riot Client:22568225688:54846:$@ah7iGKU^9eXkqiVRvZ4:https".to_string();
         assert_eq!(Lockfile::parse(text).unwrap_err(), Error::ProcessId);
     }
 
     #[test]
     fn invalid_port() {
-        let text = "Riot Client:22568:5484654846:$@ah7iGKU^9eXkqiVRvZ4:https";
+        let text = "Riot Client:22568:5484654846:$@ah7iGKU^9eXkqiVRvZ4:https".to_string();
         assert_eq!(Lockfile::parse(text).unwrap_err(), Error::Port);
     }
 }

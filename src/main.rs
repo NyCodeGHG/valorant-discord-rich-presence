@@ -1,5 +1,7 @@
 #![forbid(unsafe_code)]
 
+use std::time::Duration;
+
 use game::RiotSocketClient;
 use lockfile::Lockfile;
 
@@ -15,9 +17,13 @@ compile_error!(
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
     color_eyre::install()?;
-    let lockfile_content = Lockfile::read_from_fs()?;
-    let lockfile = Lockfile::parse(&lockfile_content)?;
-    let client = RiotSocketClient::from_lockfile(lockfile).await?;
+    tracing_subscriber::fmt::init();
+    let client = RiotSocketClient::from_lockfile(Box::new(|| {
+        let lockfile_content = Lockfile::read_from_fs().ok()?;
+        Lockfile::parse(lockfile_content).ok()
+    }))
+    .await?;
     client.subscribe(game::Event::Presences).await;
+    tokio::time::sleep(Duration::from_secs(3600)).await;
     Ok(())
 }
